@@ -20,14 +20,19 @@ def _apply_weights(G, weight_name):
     return G
 
 
-def build_graph(city, country, weight_name):
+def build_graph(city, country, weight_name, progress=None):
+    if progress:
+        progress(f"Downloading street network for {city}, {country}...")
     place = f"{city}, {country}"
     G = ox.graph_from_place(place, network_type="drive", simplify=True)
     G = ox.convert.to_undirected(G)
-    return _apply_weights(G, weight_name)
+    G = _apply_weights(G, weight_name)
+    if progress:
+        progress(f"Downloaded {G.number_of_edges()} streets, {G.number_of_nodes()} intersections")
+    return G
 
 
-def build_graph_from_file(osm_file_path, weight_name):
+def build_graph_from_file(osm_file_path, weight_name, progress=None):
     """Load a street network from a local OSM XML extract instead of the
     live Overpass API. For a very large area (a big metro, or a whole
     region), a single Overpass query for the place polygon can be slow or
@@ -36,9 +41,14 @@ def build_graph_from_file(osm_file_path, weight_name):
     with `osmium cat -f osm in.pbf -o out.osm`) and loading it locally
     avoids that entirely.
     """
+    if progress:
+        progress(f"Loading street network from {osm_file_path}...")
     G = ox.graph_from_xml(osm_file_path, simplify=True)
     G = ox.convert.to_undirected(G)
-    return _apply_weights(G, weight_name)
+    G = _apply_weights(G, weight_name)
+    if progress:
+        progress(f"Loaded {G.number_of_edges()} streets, {G.number_of_nodes()} intersections")
+    return G
 
 
 def main():
@@ -54,19 +64,16 @@ def main():
     args = parser.parse_args()
 
     if args.osm_file:
-        print(f"Loading street network from {args.osm_file} ...")
-        G = build_graph_from_file(args.osm_file, args.weight_name)
+        G = build_graph_from_file(args.osm_file, args.weight_name, progress=print)
         place_label = args.city or args.osm_file
     else:
         if not args.city or not args.country:
             parser.error("--city and --country are required unless --osm-file is given")
-        print(f"Downloading street network for {args.city}, {args.country} ...")
-        G = build_graph(args.city, args.country, args.weight_name)
+        G = build_graph(args.city, args.country, args.weight_name, progress=print)
         place_label = args.city
 
     solve = ALGORITHMS[args.algorithm]
-    print(f"Solving with '{args.algorithm}' ...")
-    route, cost = solve(G)
+    route, cost = solve(G, progress=print)
 
     print_stats(G, route, cost, args.algorithm, args.weight_name)
     out = plot_route(G, route, place_label, args.algorithm)

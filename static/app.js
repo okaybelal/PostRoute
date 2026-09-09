@@ -5,13 +5,19 @@ const ALGO_HINTS = {
   bfs: "Naive breadth-first-flavored edge cover with backtracking. Simple, usually costs more.",
 };
 
+const POLL_INTERVAL_MS = 700;
+
 const form = document.getElementById("solve-form");
 const btn = document.getElementById("solve-btn");
 const statusEl = document.getElementById("status");
+const progressLogEl = document.getElementById("progress-log");
 const errorEl = document.getElementById("error");
 const statsEl = document.getElementById("stats");
 const algoSelect = document.getElementById("algorithm");
 const algoHint = document.getElementById("algo-hint");
+
+let pollTimer = null;
+let renderedCount = 0;
 
 function updateAlgoHint() {
   algoHint.textContent = ALGO_HINTS[algoSelect.value] || "";
@@ -19,12 +25,22 @@ function updateAlgoHint() {
 algoSelect.addEventListener("change", updateAlgoHint);
 updateAlgoHint();
 
-function setLoading(loading, message) {
+function setLoading(loading) {
   btn.disabled = loading;
   statusEl.hidden = !loading;
   if (loading) {
-    statusEl.innerHTML = `<span class="spinner"></span><span>${message}</span>`;
+    progressLogEl.innerHTML = "";
+    renderedCount = 0;
   }
+}
+
+function appendMessages(messages) {
+  for (; renderedCount < messages.length; renderedCount++) {
+    const line = document.createElement("div");
+    line.textContent = messages[renderedCount];
+    progressLogEl.appendChild(line);
+  }
+  progressLogEl.scrollTop = progressLogEl.scrollHeight;
 }
 
 function renderStats(stats) {
@@ -42,8 +58,46 @@ function renderStats(stats) {
   statsEl.hidden = false;
 }
 
+function stopPolling() {
+  if (pollTimer !== null) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+}
+
+async function pollStatus(jobId) {
+  let data;
+  try {
+    const res = await fetch(`/api/solve/status/${jobId}`);
+    data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Lost track of that job.");
+  } catch (err) {
+    // transient network hiccup — just retry on the next tick
+    pollTimer = setTimeout(() => pollStatus(jobId), POLL_INTERVAL_MS);
+    return;
+  }
+
+  appendMessages(data.messages || []);
+
+  if (data.status === "running") {
+    pollTimer = setTimeout(() => pollStatus(jobId), POLL_INTERVAL_MS);
+    return;
+  }
+
+  setLoading(false);
+
+  if (data.status === "done") {
+    renderStats(data.result.stats);
+    Plotly.newPlot("map", data.result.figure.data, data.result.figure.layout, { responsive: true });
+  } else {
+    errorEl.textContent = data.error || "Something went wrong.";
+    errorEl.hidden = false;
+  }
+}
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
+  stopPolling();
   errorEl.hidden = true;
   statsEl.hidden = true;
 
@@ -54,7 +108,7 @@ form.addEventListener("submit", async (e) => {
     algorithm: algoSelect.value,
   };
 
-  setLoading(true, "Downloading street network and solving — this can take a while for larger cities…");
+  setLoading(true);
 
   try {
     const res = await fetch("/api/solve", {
@@ -68,12 +122,10 @@ form.addEventListener("submit", async (e) => {
       throw new Error(data.error || "Something went wrong.");
     }
 
-    renderStats(data.stats);
-    Plotly.newPlot("map", data.figure.data, data.figure.layout, { responsive: true });
+    pollStatus(data.job_id);
   } catch (err) {
+    setLoading(false);
     errorEl.textContent = err.message || "Something went wrong.";
     errorEl.hidden = false;
-  } finally {
-    setLoading(false, "");
   }
 });

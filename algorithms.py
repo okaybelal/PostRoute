@@ -11,6 +11,10 @@ import random
 import networkx as nx
 
 
+def _noop(msg):
+    pass
+
+
 def edge_weight(G, u, v):
     """Weight of one u-v edge, whether G is a Graph or MultiGraph."""
     data = G[u][v]
@@ -41,7 +45,7 @@ def _as_simple_weighted(G):
     return H
 
 
-def _eulerize(H, exact_threshold=300, k_nearest=10):
+def _eulerize(H, exact_threshold=300, k_nearest=10, progress=None):
     """Turn H into an Eulerian multigraph by duplicating the minimum-weight
     set of edges needed to fix every odd-degree vertex.
 
@@ -60,6 +64,7 @@ def _eulerize(H, exact_threshold=300, k_nearest=10):
     k_nearest) at the expense of a possibly slightly longer (non-optimal)
     route.
     """
+    progress = progress or _noop
     odd = [n for n, d in H.degree() if d % 2 == 1]
     eulerized = nx.MultiGraph(H)
     if not odd:
@@ -67,10 +72,15 @@ def _eulerize(H, exact_threshold=300, k_nearest=10):
 
     odd_set = set(odd)
     exact = len(odd) <= exact_threshold
+    progress(
+        f"Found {len(odd)} odd-degree intersections to pair up "
+        f"({'exact' if exact else f'approximate, {k_nearest} nearest each'} matching)"
+    )
 
     candidates = nx.Graph()
     candidates.add_nodes_from(odd)
-    for n in odd:
+    tick = max(1, len(odd) // 10)
+    for i, n in enumerate(odd, 1):
         dist, paths = nx.single_source_dijkstra(H, n, weight="weight")
         others = sorted(
             ((d, o) for o, d in dist.items() if o in odd_set and o != n)
@@ -80,7 +90,10 @@ def _eulerize(H, exact_threshold=300, k_nearest=10):
         for d, o in others:
             if not candidates.has_edge(n, o) or candidates[n][o]["weight"] < -d:
                 candidates.add_edge(n, o, weight=-d, path=paths[o])
+        if i % tick == 0 or i == len(odd):
+            progress(f"Computing shortest paths: {i}/{len(odd)} intersections")
 
+    progress("Running minimum-weight matching...")
     matching = nx.max_weight_matching(candidates, maxcardinality=True)
 
     matched = {n for pair in matching for n in pair}
@@ -93,6 +106,7 @@ def _eulerize(H, exact_threshold=300, k_nearest=10):
         matching = set(matching) | {(n, best)}
         candidates.add_edge(n, best, path=paths[best])
 
+    progress(f"Matched {len(matching)} pairs, duplicating streets to build an Eulerian circuit...")
     for m, n in matching:
         path = candidates[m][n]["path"]
         for a, b in zip(path[:-1], path[1:]):
@@ -101,29 +115,35 @@ def _eulerize(H, exact_threshold=300, k_nearest=10):
     return eulerized
 
 
-def chinese_postman(G, source=None):
+def chinese_postman(G, source=None, progress=None):
     """Optimal solution: eulerize the graph (min-weight matching on odd
     vertices) then take an Eulerian circuit. This is what real-world
     route-inspection solvers use in practice.
     """
+    progress = progress or _noop
     H = _as_simple_weighted(G)
     if source is None:
         source = next(iter(H.nodes))
 
-    eulerized = _eulerize(H)
+    progress("Solving with Chinese Postman (optimal)...")
+    eulerized = _eulerize(H, progress=progress)
+    progress("Walking the Eulerian circuit...")
     circuit = list(nx.eulerian_circuit(eulerized, source=source))
     route = [circuit[0][0]] + [v for _, v in circuit]
+    progress(f"Route complete: {len(route)} stops")
     return route, route_cost(eulerized, route)
 
 
-def fleury(G, source=None):
+def fleury(G, source=None, progress=None):
     """Fleury's algorithm: repeatedly walk an edge that isn't a bridge
     (unless it's the only option), removing edges as they're used.
     Requires the graph to already be Eulerian (0 or 2 odd-degree nodes);
     non-Eulerian graphs are first eulerized like chinese_postman does.
     """
+    progress = progress or _noop
     H = _as_simple_weighted(G)
-    eulerized = _eulerize(H)
+    progress("Solving with Fleury's algorithm...")
+    eulerized = _eulerize(H, progress=progress)
     work = eulerized.copy()
 
     odd = [n for n, d in work.degree() if d % 2 == 1]
@@ -152,6 +172,7 @@ def fleury(G, source=None):
         work.remove_edge(current, nxt)
         current = nxt
 
+    progress(f"Route complete: {len(route)} stops")
     return route, route_cost(eulerized, route)
 
 
@@ -159,18 +180,22 @@ def _edge_key(u, v):
     return (u, v) if u <= v else (v, u)
 
 
-def _naive_edge_cover(G, source, strategy="dfs"):
+def _naive_edge_cover(G, source, strategy="dfs", progress=None):
     """Heuristic baseline: greedily walk to any neighbor with an uncovered
     edge, and when stuck (no uncovered edge from the current node), jump
     to the nearest node that still has one via a single weighted Dijkstra
     run. Unlike `_eulerize`, this never pays for a min-weight matching —
     it's the cheap, non-optimal option for graphs too big for `cpp`.
     """
+    progress = progress or _noop
     H = _as_simple_weighted(G)
     remaining = {_edge_key(u, v) for u, v in H.edges()}
+    total = len(remaining)
+    tick = max(1, total // 10)
     route = [source]
     current = source
 
+    progress(f"Solving with {strategy} ({total} streets to cover)...")
     while remaining:
         neighbors = [v for v in H.neighbors(current) if _edge_key(current, v) in remaining]
         if neighbors:
@@ -188,21 +213,26 @@ def _naive_edge_cover(G, source, strategy="dfs"):
                 route.append(b)
             current = nxt_target
 
+        covered = total - len(remaining)
+        if covered % tick == 0 or not remaining:
+            progress(f"Covered {covered}/{total} streets")
+
+    progress(f"Route complete: {len(route)} stops")
     return route, route_cost(H, route)
 
 
-def dfs_cover(G, source=None):
+def dfs_cover(G, source=None, progress=None):
     H = _as_simple_weighted(G)
     if source is None:
         source = next(iter(H.nodes))
-    return _naive_edge_cover(G, source, strategy="dfs")
+    return _naive_edge_cover(G, source, strategy="dfs", progress=progress)
 
 
-def bfs_cover(G, source=None):
+def bfs_cover(G, source=None, progress=None):
     H = _as_simple_weighted(G)
     if source is None:
         source = next(iter(H.nodes))
-    return _naive_edge_cover(G, source, strategy="bfs")
+    return _naive_edge_cover(G, source, strategy="bfs", progress=progress)
 
 
 ALGORITHMS = {

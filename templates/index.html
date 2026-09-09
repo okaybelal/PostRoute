@@ -44,7 +44,10 @@
         <button type="submit" id="solve-btn">Solve route</button>
       </form>
 
-      <div id="status" class="status" hidden></div>
+      <div id="status" class="status" hidden>
+        <div class="status-header"><span class="spinner"></span><span>Solving…</span></div>
+        <div id="progress-log" class="progress-log"></div>
+      </div>
       <div id="error" class="error" hidden></div>
 
       <div id="stats" class="stats-grid" hidden>
