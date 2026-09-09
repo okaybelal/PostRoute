@@ -9,9 +9,22 @@ Example:
 import argparse
 
 import osmnx as ox
+import requests
 
 from algorithms import ALGORITHMS
 from utils import plot_route, print_stats
+
+# overpass-api.de (osmnx's default) blocks connections from a number of
+# cloud-hosting IP ranges (AWS, GCP, Render, etc.) to deter scraping/abuse
+# — that shows up as requests.exceptions.ConnectionError, not a slow
+# response or an explicit rate-limit reply, so it never recovers on its
+# own. Fall back to other public mirrors on a different network if the
+# primary one refuses the connection.
+OVERPASS_MIRRORS = [
+    ox.settings.overpass_url,
+    "https://overpass.kumi.systems/api",
+    "https://overpass.osm.ch/api",
+]
 
 
 def _apply_weights(G, weight_name):
@@ -20,11 +33,26 @@ def _apply_weights(G, weight_name):
     return G
 
 
+def _with_overpass_fallback(fetch, progress=None):
+    last_error = None
+    for i, mirror in enumerate(OVERPASS_MIRRORS):
+        ox.settings.overpass_url = mirror
+        try:
+            return fetch()
+        except requests.exceptions.ConnectionError as e:
+            last_error = e
+            if progress and i + 1 < len(OVERPASS_MIRRORS):
+                progress(f"{mirror} refused the connection, trying another Overpass mirror...", 0.0)
+    raise last_error
+
+
 def build_graph(city, country, weight_name, progress=None):
     if progress:
         progress(f"Downloading street network for {city}, {country}...", 0.0)
     place = f"{city}, {country}"
-    G = ox.graph_from_place(place, network_type="drive", simplify=True)
+    G = _with_overpass_fallback(
+        lambda: ox.graph_from_place(place, network_type="drive", simplify=True), progress
+    )
     G = ox.convert.to_undirected(G)
     G = _apply_weights(G, weight_name)
     if progress:
