@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PostRoute</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>PostRoute</h1>
+    <p>Minimum-cost delivery routes that cover every street, solved on real OpenStreetMap data.</p>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <form id="solve-form">
+        <label>
+          City
+          <input type="text" id="city" placeholder="e.g. Piedmont" required>
+        </label>
+        <label>
+          Country
+          <input type="text" id="country" placeholder="e.g. USA" required>
+        </label>
+        <label>
+          Weight metric
+          <select id="weight_name">
+            <option value="length">Distance (length)</option>
+            <option value="travel_time">Travel time</option>
+          </select>
+        </label>
+        <label>
+          Algorithm
+          <select id="algorithm">
+            {% for algo in algorithms %}
+            <option value="{{ algo }}">{{ algo }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <p class="algo-hint" id="algo-hint"></p>
+
+        <button type="submit" id="solve-btn">Solve route</button>
+      </form>
+
+      <div id="status" class="status" hidden></div>
+      <div id="error" class="error" hidden></div>
+
+      <div id="stats" class="stats-grid" hidden>
+        <div class="stat"><span class="stat-value" id="stat-streets">–</span><span class="stat-label">streets</span></div>
+        <div class="stat"><span class="stat-value" id="stat-intersections">–</span><span class="stat-label">intersections</span></div>
+        <div class="stat"><span class="stat-value" id="stat-stops">–</span><span class="stat-label">stops on route</span></div>
+        <div class="stat"><span class="stat-value" id="stat-cost">–</span><span class="stat-label" id="stat-cost-label">total cost</span></div>
+      </div>
+    </section>
+
+    <section class="map-panel">
+      <div id="map" class="map"></div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

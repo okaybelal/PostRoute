@@ -14,6 +14,16 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Web app
+
+```
+python app.py
+```
+
+Open `http://localhost:5050`, type a city and country, pick a weight metric and algorithm, and hit **Solve route**. Stats and the interactive map render right in the page. The solve runs live (real OSMnx download), so larger cities can take a while.
+
+### CLI
+
 ```
 python script.py --city <city> --country <country> --weight_name length --algorithm cpp
 ```

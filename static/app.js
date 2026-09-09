@@ -1,0 +1,79 @@
+const ALGO_HINTS = {
+  cpp: "Optimal: minimum-weight matching to eulerize the graph, then an Eulerian circuit.",
+  fleury: "Classic Eulerian-circuit walk that avoids stranding bridges — matches cpp's cost.",
+  dfs: "Naive depth-first edge cover with backtracking. Simple, usually costs more than cpp.",
+  bfs: "Naive breadth-first-flavored edge cover with backtracking. Simple, usually costs more.",
+};
+
+const form = document.getElementById("solve-form");
+const btn = document.getElementById("solve-btn");
+const statusEl = document.getElementById("status");
+const errorEl = document.getElementById("error");
+const statsEl = document.getElementById("stats");
+const algoSelect = document.getElementById("algorithm");
+const algoHint = document.getElementById("algo-hint");
+
+function updateAlgoHint() {
+  algoHint.textContent = ALGO_HINTS[algoSelect.value] || "";
+}
+algoSelect.addEventListener("change", updateAlgoHint);
+updateAlgoHint();
+
+function setLoading(loading, message) {
+  btn.disabled = loading;
+  statusEl.hidden = !loading;
+  if (loading) {
+    statusEl.innerHTML = `<span class="spinner"></span><span>${message}</span>`;
+  }
+}
+
+function renderStats(stats) {
+  document.getElementById("stat-streets").textContent = stats.streets.toLocaleString();
+  document.getElementById("stat-intersections").textContent = stats.intersections.toLocaleString();
+  document.getElementById("stat-stops").textContent = stats.stops.toLocaleString();
+
+  if (stats.distance_km !== undefined) {
+    document.getElementById("stat-cost").textContent = `${stats.distance_km.toLocaleString()} km`;
+    document.getElementById("stat-cost-label").textContent = "total distance";
+  } else {
+    document.getElementById("stat-cost").textContent = `${stats.time_min.toLocaleString()} min`;
+    document.getElementById("stat-cost-label").textContent = "total time";
+  }
+  statsEl.hidden = false;
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  errorEl.hidden = true;
+  statsEl.hidden = true;
+
+  const payload = {
+    city: document.getElementById("city").value.trim(),
+    country: document.getElementById("country").value.trim(),
+    weight_name: document.getElementById("weight_name").value,
+    algorithm: algoSelect.value,
+  };
+
+  setLoading(true, "Downloading street network and solving — this can take a while for larger cities…");
+
+  try {
+    const res = await fetch("/api/solve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Something went wrong.");
+    }
+
+    renderStats(data.stats);
+    Plotly.newPlot("map", data.figure.data, data.figure.layout, { responsive: true });
+  } catch (err) {
+    errorEl.textContent = err.message || "Something went wrong.";
+    errorEl.hidden = false;
+  } finally {
+    setLoading(false, "");
+  }
+});

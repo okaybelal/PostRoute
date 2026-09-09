@@ -14,7 +14,8 @@ def route_to_latlon(G, route):
     return lats, lons
 
 
-def plot_route(G, route, city, algorithm_name, out_html="route_map.html"):
+def build_figure(G, route, city, algorithm_name):
+    """Build the Plotly map figure for a solved route (no I/O)."""
     lats, lons = route_to_latlon(G, route)
 
     fig = go.Figure()
@@ -57,21 +58,43 @@ def plot_route(G, route, city, algorithm_name, out_html="route_map.html"):
         margin=dict(l=0, r=0, t=40, b=0),
     )
 
+    return fig
+
+
+def plot_route(G, route, city, algorithm_name, out_html="route_map.html"):
+    fig = build_figure(G, route, city, algorithm_name)
     fig.write_html(out_html)
     fig.show()
     return out_html
 
 
-def print_stats(G, route, cost, algorithm_name, weight_name):
+def build_stats(G, route, cost, algorithm_name, weight_name):
     unit = "meters" if weight_name == "length" else "seconds"
-    print("=" * 50)
-    print(f"Algorithm: {algorithm_name}")
-    print(f"Streets in network (edges): {G.number_of_edges()}")
-    print(f"Intersections (nodes): {G.number_of_nodes()}")
-    print(f"Stops on route: {len(route)}")
-    print(f"Total route cost ({unit}): {cost:.1f}")
+    stats = {
+        "algorithm": algorithm_name,
+        "streets": G.number_of_edges(),
+        "intersections": G.number_of_nodes(),
+        "stops": len(route),
+        "cost": round(cost, 1),
+        "cost_unit": unit,
+    }
     if weight_name == "length":
-        print(f"Total route distance (km): {cost / 1000:.2f}")
+        stats["distance_km"] = round(cost / 1000, 2)
     else:
-        print(f"Total route time (min): {cost / 60:.1f}")
+        stats["time_min"] = round(cost / 60, 1)
+    return stats
+
+
+def print_stats(G, route, cost, algorithm_name, weight_name):
+    stats = build_stats(G, route, cost, algorithm_name, weight_name)
+    print("=" * 50)
+    print(f"Algorithm: {stats['algorithm']}")
+    print(f"Streets in network (edges): {stats['streets']}")
+    print(f"Intersections (nodes): {stats['intersections']}")
+    print(f"Stops on route: {stats['stops']}")
+    print(f"Total route cost ({stats['cost_unit']}): {stats['cost']:.1f}")
+    if "distance_km" in stats:
+        print(f"Total route distance (km): {stats['distance_km']:.2f}")
+    else:
+        print(f"Total route time (min): {stats['time_min']:.1f}")
     print("=" * 50)
