@@ -6,6 +6,10 @@ This is the **Chinese Postman Problem** (Route Inspection Problem): given a city
 
 Built with `osmnx`, `networkx`, `pandas`, `numpy`, and `plotly`.
 
+**Live:** [postroute-21bz.onrender.com](https://postroute-21bz.onrender.com) (free tier — sleeps after 15 min idle, first request after that takes ~30-50s to wake up)
+
+Solved live on the deployed instance, Manhattan with `cpp`: 8,215 streets, 4,634 intersections, a 9,585-stop route covering 1,123.7 km.
+
 ## Setup
 
 ```

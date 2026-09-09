@@ -11,6 +11,8 @@ const form = document.getElementById("solve-form");
 const btn = document.getElementById("solve-btn");
 const statusEl = document.getElementById("status");
 const progressLogEl = document.getElementById("progress-log");
+const progressBarEl = document.getElementById("progress-bar");
+const progressBarFillEl = document.getElementById("progress-bar-fill");
 const errorEl = document.getElementById("error");
 const statsEl = document.getElementById("stats");
 const algoSelect = document.getElementById("algorithm");
@@ -31,6 +33,8 @@ function setLoading(loading) {
   if (loading) {
     progressLogEl.innerHTML = "";
     renderedCount = 0;
+    progressBarFillEl.style.width = "";
+    progressBarEl.classList.add("indeterminate");
   }
 }
 
@@ -41,6 +45,22 @@ function appendMessages(messages) {
     progressLogEl.appendChild(line);
   }
   progressLogEl.scrollTop = progressLogEl.scrollHeight;
+
+  updateProgressBar(messages[messages.length - 1]);
+}
+
+function updateProgressBar(lastMessage) {
+  // Reflect the real "done/total" fraction from the backend's own
+  // progress messages when one is present — no fabricated percentage.
+  const match = lastMessage && lastMessage.match(/(\d+)\/(\d+)/);
+  if (match) {
+    const pct = Math.min(100, (Number(match[1]) / Number(match[2])) * 100);
+    progressBarEl.classList.remove("indeterminate");
+    progressBarFillEl.style.width = `${pct}%`;
+  } else {
+    progressBarEl.classList.add("indeterminate");
+    progressBarFillEl.style.width = "";
+  }
 }
 
 function renderStats(stats) {
