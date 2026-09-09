@@ -24,7 +24,9 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open `http://localhost:5050`, type a city and country, pick a weight metric and algorithm, and hit **Solve route**. Stats and the interactive map render right in the page. The solve runs live (real OSMnx download), so larger cities can take a while.
+Open `http://localhost:5050`, type a city and country, pick a weight metric and algorithm, and hit **Solve route**. The solve runs live (real OSMnx download), so larger cities can take a while — instead of a blind spinner, a progress bar tracks real overall completion (0-100%, weighted across download → matching → circuit-building, not per-stage guesswork) alongside a live log of what the solver is actually doing stage by stage. Stats and the interactive map render once it's done.
+
+Under the hood: submitting the form starts the solve on a background thread and the page polls for status every ~700ms, so the browser tab stays responsive throughout rather than blocking on one long request.
 
 ### CLI
 
