@@ -9,22 +9,29 @@ Example:
 import argparse
 
 import osmnx as ox
-import requests
 
 from algorithms import ALGORITHMS
 from utils import plot_route, print_stats
 
 # overpass-api.de (osmnx's default) blocks connections from a number of
-# cloud-hosting IP ranges (AWS, GCP, Render, etc.) to deter scraping/abuse
-# — that shows up as requests.exceptions.ConnectionError, not a slow
-# response or an explicit rate-limit reply, so it never recovers on its
-# own. Fall back to other public mirrors on a different network if the
-# primary one refuses the connection.
+# cloud-hosting IP ranges (AWS, GCP, Render, etc.) to deter scraping/abuse.
+# Fall back to other public mirrors on a different network if the primary
+# one fails — whatever the failure mode turns out to be in practice (a
+# refused connection, a DNS hiccup, osmnx's own internal exception types),
+# so this deliberately catches broadly per mirror rather than guessing one
+# specific exception class.
 OVERPASS_MIRRORS = [
     ox.settings.overpass_url,
     "https://overpass.kumi.systems/api",
     "https://overpass.osm.ch/api",
 ]
+
+# osmnx's own polite-pause logic (checking the server's /status endpoint,
+# then sleeping the duration it reports) silently falls back to a 60s
+# default pause if that status check itself fails to connect — which just
+# burns time against a server that's blocking us anyway. We handle our own
+# resilience via OVERPASS_MIRRORS, so skip osmnx's pause step entirely.
+ox.settings.overpass_rate_limit = False
 
 
 def _apply_weights(G, weight_name):
@@ -39,10 +46,12 @@ def _with_overpass_fallback(fetch, progress=None):
         ox.settings.overpass_url = mirror
         try:
             return fetch()
-        except requests.exceptions.ConnectionError as e:
+        except Exception as e:
             last_error = e
             if progress and i + 1 < len(OVERPASS_MIRRORS):
-                progress(f"{mirror} refused the connection, trying another Overpass mirror...", 0.0)
+                progress(
+                    f"{mirror} failed ({type(e).__name__}: {e}), trying another Overpass mirror...", 0.0
+                )
     raise last_error
 
 
