@@ -11,8 +11,8 @@ const form = document.getElementById("solve-form");
 const btn = document.getElementById("solve-btn");
 const statusEl = document.getElementById("status");
 const progressLogEl = document.getElementById("progress-log");
-const progressBarEl = document.getElementById("progress-bar");
 const progressBarFillEl = document.getElementById("progress-bar-fill");
+const progressPctEl = document.getElementById("progress-pct");
 const errorEl = document.getElementById("error");
 const statsEl = document.getElementById("stats");
 const algoSelect = document.getElementById("algorithm");
@@ -33,8 +33,7 @@ function setLoading(loading) {
   if (loading) {
     progressLogEl.innerHTML = "";
     renderedCount = 0;
-    progressBarFillEl.style.width = "";
-    progressBarEl.classList.add("indeterminate");
+    updateProgressBar(0);
   }
 }
 
@@ -45,22 +44,15 @@ function appendMessages(messages) {
     progressLogEl.appendChild(line);
   }
   progressLogEl.scrollTop = progressLogEl.scrollHeight;
-
-  updateProgressBar(messages[messages.length - 1]);
 }
 
-function updateProgressBar(lastMessage) {
-  // Reflect the real "done/total" fraction from the backend's own
-  // progress messages when one is present — no fabricated percentage.
-  const match = lastMessage && lastMessage.match(/(\d+)\/(\d+)/);
-  if (match) {
-    const pct = Math.min(100, (Number(match[1]) / Number(match[2])) * 100);
-    progressBarEl.classList.remove("indeterminate");
-    progressBarFillEl.style.width = `${pct}%`;
-  } else {
-    progressBarEl.classList.add("indeterminate");
-    progressBarFillEl.style.width = "";
-  }
+function updateProgressBar(progress) {
+  // A single fraction (0-1) of overall pipeline completion, reported
+  // directly by the backend — one continuous bar across every stage
+  // (download, matching, circuit walk), not per-stage guesswork.
+  const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
+  progressBarFillEl.style.width = `${pct}%`;
+  progressPctEl.textContent = `${pct}%`;
 }
 
 function renderStats(stats) {
@@ -98,6 +90,7 @@ async function pollStatus(jobId) {
   }
 
   appendMessages(data.messages || []);
+  updateProgressBar(data.progress || 0);
 
   if (data.status === "running") {
     pollTimer = setTimeout(() => pollStatus(jobId), POLL_INTERVAL_MS);

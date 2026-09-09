@@ -11,7 +11,7 @@ import random
 import networkx as nx
 
 
-def _noop(msg):
+def _noop(msg, frac=None):
     pass
 
 
@@ -45,7 +45,7 @@ def _as_simple_weighted(G):
     return H
 
 
-def _eulerize(H, exact_threshold=300, k_nearest=10, progress=None):
+def _eulerize(H, exact_threshold=300, k_nearest=10, progress=None, frac_range=(0.0, 1.0)):
     """Turn H into an Eulerian multigraph by duplicating the minimum-weight
     set of edges needed to fix every odd-degree vertex.
 
@@ -63,8 +63,17 @@ def _eulerize(H, exact_threshold=300, k_nearest=10, progress=None):
     `k_nearest` closest odd neighbors, bounding the cost to ~O(k *
     k_nearest) at the expense of a possibly slightly longer (non-optimal)
     route.
+
+    `progress` calls report a fraction linearly rescaled into `frac_range`,
+    so the caller controls what share of the overall pipeline this step
+    represents.
     """
     progress = progress or _noop
+    lo, hi = frac_range
+
+    def scaled(f):
+        return lo + (hi - lo) * f
+
     odd = [n for n, d in H.degree() if d % 2 == 1]
     eulerized = nx.MultiGraph(H)
     if not odd:
@@ -74,7 +83,8 @@ def _eulerize(H, exact_threshold=300, k_nearest=10, progress=None):
     exact = len(odd) <= exact_threshold
     progress(
         f"Found {len(odd)} odd-degree intersections to pair up "
-        f"({'exact' if exact else f'approximate, {k_nearest} nearest each'} matching)"
+        f"({'exact' if exact else f'approximate, {k_nearest} nearest each'} matching)",
+        scaled(0.05),
     )
 
     candidates = nx.Graph()
@@ -91,9 +101,9 @@ def _eulerize(H, exact_threshold=300, k_nearest=10, progress=None):
             if not candidates.has_edge(n, o) or candidates[n][o]["weight"] < -d:
                 candidates.add_edge(n, o, weight=-d, path=paths[o])
         if i % tick == 0 or i == len(odd):
-            progress(f"Computing shortest paths: {i}/{len(odd)} intersections")
+            progress(f"Computing shortest paths: {i}/{len(odd)} intersections", scaled(0.05 + 0.55 * i / len(odd)))
 
-    progress("Running minimum-weight matching...")
+    progress("Running minimum-weight matching...", scaled(0.65))
     matching = nx.max_weight_matching(candidates, maxcardinality=True)
 
     matched = {n for pair in matching for n in pair}
@@ -106,7 +116,7 @@ def _eulerize(H, exact_threshold=300, k_nearest=10, progress=None):
         matching = set(matching) | {(n, best)}
         candidates.add_edge(n, best, path=paths[best])
 
-    progress(f"Matched {len(matching)} pairs, duplicating streets to build an Eulerian circuit...")
+    progress(f"Matched {len(matching)} pairs, duplicating streets to build an Eulerian circuit...", scaled(0.85))
     for m, n in matching:
         path = candidates[m][n]["path"]
         for a, b in zip(path[:-1], path[1:]):
@@ -125,12 +135,12 @@ def chinese_postman(G, source=None, progress=None):
     if source is None:
         source = next(iter(H.nodes))
 
-    progress("Solving with Chinese Postman (optimal)...")
-    eulerized = _eulerize(H, progress=progress)
-    progress("Walking the Eulerian circuit...")
+    progress("Solving with Chinese Postman (optimal)...", 0.15)
+    eulerized = _eulerize(H, progress=progress, frac_range=(0.15, 0.85))
+    progress("Walking the Eulerian circuit...", 0.90)
     circuit = list(nx.eulerian_circuit(eulerized, source=source))
     route = [circuit[0][0]] + [v for _, v in circuit]
-    progress(f"Route complete: {len(route)} stops")
+    progress(f"Route complete: {len(route)} stops", 1.0)
     return route, route_cost(eulerized, route)
 
 
@@ -142,14 +152,16 @@ def fleury(G, source=None, progress=None):
     """
     progress = progress or _noop
     H = _as_simple_weighted(G)
-    progress("Solving with Fleury's algorithm...")
-    eulerized = _eulerize(H, progress=progress)
+    progress("Solving with Fleury's algorithm...", 0.15)
+    eulerized = _eulerize(H, progress=progress, frac_range=(0.15, 0.80))
     work = eulerized.copy()
 
     odd = [n for n, d in work.degree() if d % 2 == 1]
     if source is None:
         source = odd[0] if odd else next(iter(work.nodes))
 
+    total_edges = work.number_of_edges()
+    tick = max(1, total_edges // 10)
     route = [source]
     current = source
     while work.number_of_edges() > 0:
@@ -172,7 +184,11 @@ def fleury(G, source=None, progress=None):
         work.remove_edge(current, nxt)
         current = nxt
 
-    progress(f"Route complete: {len(route)} stops")
+        walked = total_edges - work.number_of_edges()
+        if walked % tick == 0:
+            progress(f"Walking the Eulerian circuit: {walked}/{total_edges} streets", 0.80 + 0.18 * walked / total_edges)
+
+    progress(f"Route complete: {len(route)} stops", 1.0)
     return route, route_cost(eulerized, route)
 
 
@@ -195,7 +211,7 @@ def _naive_edge_cover(G, source, strategy="dfs", progress=None):
     route = [source]
     current = source
 
-    progress(f"Solving with {strategy} ({total} streets to cover)...")
+    progress(f"Solving with {strategy} ({total} streets to cover)...", 0.15)
     while remaining:
         neighbors = [v for v in H.neighbors(current) if _edge_key(current, v) in remaining]
         if neighbors:
@@ -215,9 +231,9 @@ def _naive_edge_cover(G, source, strategy="dfs", progress=None):
 
         covered = total - len(remaining)
         if covered % tick == 0 or not remaining:
-            progress(f"Covered {covered}/{total} streets")
+            progress(f"Covered {covered}/{total} streets", 0.15 + 0.83 * covered / total)
 
-    progress(f"Route complete: {len(route)} stops")
+    progress(f"Route complete: {len(route)} stops", 1.0)
     return route, route_cost(H, route)
 
 

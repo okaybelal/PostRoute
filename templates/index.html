@@ -45,8 +45,11 @@
       </form>
 
       <div id="status" class="status" hidden>
-        <div class="status-header"><span class="spinner"></span><span>Solving…</span></div>
-        <div id="progress-bar" class="progress-bar indeterminate"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
+        <div class="status-header">
+          <span class="spinner"></span><span>Solving…</span>
+          <span id="progress-pct" class="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar"><div id="progress-bar-fill" class="progress-bar-fill"></div></div>
         <div id="progress-log" class="progress-log"></div>
       </div>
       <div id="error" class="error" hidden></div>

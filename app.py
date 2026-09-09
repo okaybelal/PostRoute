@@ -25,9 +25,11 @@ jobs_lock = threading.Lock()
 
 
 def _run_job(job_id, city, country, weight_name, algorithm):
-    def progress(msg):
+    def progress(msg, frac=None):
         with jobs_lock:
             jobs[job_id]["messages"].append(msg)
+            if frac is not None:
+                jobs[job_id]["progress"] = frac
 
     try:
         G = build_graph(city, country, weight_name, progress=progress)
@@ -60,6 +62,7 @@ def _run_job(job_id, city, country, weight_name, algorithm):
 
     with jobs_lock:
         jobs[job_id]["status"] = "done"
+        jobs[job_id]["progress"] = 1.0
         jobs[job_id]["result"] = {"stats": stats, "figure": figure_dict}
 
 
@@ -84,7 +87,7 @@ def solve():
         return jsonify(error=f"Unknown algorithm '{algorithm}'."), 400
 
     job_id = uuid.uuid4().hex
-    jobs[job_id] = {"status": "running", "messages": [], "result": None, "error": None}
+    jobs[job_id] = {"status": "running", "messages": [], "result": None, "error": None, "progress": 0.0}
 
     thread = threading.Thread(target=_run_job, args=(job_id, city, country, weight_name, algorithm), daemon=True)
     thread.start()
@@ -102,6 +105,7 @@ def solve_status(job_id):
         return jsonify(
             status=job["status"],
             messages=job["messages"],
+            progress=job["progress"],
             result=job["result"],
             error=job["error"],
         )

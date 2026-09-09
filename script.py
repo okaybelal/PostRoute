@@ -22,13 +22,13 @@ def _apply_weights(G, weight_name):
 
 def build_graph(city, country, weight_name, progress=None):
     if progress:
-        progress(f"Downloading street network for {city}, {country}...")
+        progress(f"Downloading street network for {city}, {country}...", 0.0)
     place = f"{city}, {country}"
     G = ox.graph_from_place(place, network_type="drive", simplify=True)
     G = ox.convert.to_undirected(G)
     G = _apply_weights(G, weight_name)
     if progress:
-        progress(f"Downloaded {G.number_of_edges()} streets, {G.number_of_nodes()} intersections")
+        progress(f"Downloaded {G.number_of_edges()} streets, {G.number_of_nodes()} intersections", 0.15)
     return G
 
 
@@ -42,12 +42,12 @@ def build_graph_from_file(osm_file_path, weight_name, progress=None):
     avoids that entirely.
     """
     if progress:
-        progress(f"Loading street network from {osm_file_path}...")
+        progress(f"Loading street network from {osm_file_path}...", 0.0)
     G = ox.graph_from_xml(osm_file_path, simplify=True)
     G = ox.convert.to_undirected(G)
     G = _apply_weights(G, weight_name)
     if progress:
-        progress(f"Loaded {G.number_of_edges()} streets, {G.number_of_nodes()} intersections")
+        progress(f"Loaded {G.number_of_edges()} streets, {G.number_of_nodes()} intersections", 0.15)
     return G
 
 
@@ -63,17 +63,20 @@ def main():
                          help="Routing algorithm: cpp (optimal), fleury, dfs, bfs")
     args = parser.parse_args()
 
+    def log(msg, frac=None):
+        print(msg)
+
     if args.osm_file:
-        G = build_graph_from_file(args.osm_file, args.weight_name, progress=print)
+        G = build_graph_from_file(args.osm_file, args.weight_name, progress=log)
         place_label = args.city or args.osm_file
     else:
         if not args.city or not args.country:
             parser.error("--city and --country are required unless --osm-file is given")
-        G = build_graph(args.city, args.country, args.weight_name, progress=print)
+        G = build_graph(args.city, args.country, args.weight_name, progress=log)
         place_label = args.city
 
     solve = ALGORITHMS[args.algorithm]
-    route, cost = solve(G, progress=print)
+    route, cost = solve(G, progress=log)
 
     print_stats(G, route, cost, args.algorithm, args.weight_name)
     out = plot_route(G, route, place_label, args.algorithm)

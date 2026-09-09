@@ -147,14 +147,11 @@ button#solve-btn:hover:not(:disabled) {
   transition: width 0.3s ease;
 }
 
-.progress-bar.indeterminate .progress-bar-fill {
-  width: 40% !important;
-  animation: indeterminate 1.1s ease-in-out infinite;
-}
-
-@keyframes indeterminate {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(250%); }
+.progress-pct {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .progress-log {
