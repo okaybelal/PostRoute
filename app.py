@@ -4,6 +4,7 @@ with live progress while it solves.
 """
 
 import json
+import logging
 import os
 import threading
 import uuid
@@ -16,6 +17,8 @@ from script import build_graph
 from utils import build_figure, build_stats
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("postroute")
 
 # In-memory job store — requires running as a single worker process (see
 # Procfile/render.yaml: --workers 1 --threads N). With multiple worker
@@ -34,6 +37,7 @@ def _run_job(job_id, city, country, weight_name, algorithm):
     try:
         G = build_graph(city, country, weight_name, progress=progress)
     except Exception:
+        logger.exception("build_graph failed for city=%r country=%r", city, country)
         with jobs_lock:
             jobs[job_id]["status"] = "error"
             jobs[job_id]["error"] = (
@@ -51,6 +55,7 @@ def _run_job(job_id, city, country, weight_name, algorithm):
     try:
         route, cost = ALGORITHMS[algorithm](G, progress=progress)
     except Exception:
+        logger.exception("Solving failed for job_id=%s city=%r country=%r algorithm=%r", job_id, city, country, algorithm)
         with jobs_lock:
             jobs[job_id]["status"] = "error"
             jobs[job_id]["error"] = "Solving failed for that street network. Try a different area or algorithm."
