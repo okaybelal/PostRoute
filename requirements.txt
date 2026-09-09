@@ -1,0 +1,5 @@
+osmnx>=1.9
+networkx>=3.2
+pandas>=2.0
+numpy>=1.26
+plotly>=5.20
