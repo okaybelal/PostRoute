@@ -56,7 +56,7 @@ If you just need *a* route fast and don't need the shortest one, `dfs`/`bfs` ski
 
 ### Large areas
 
-For a whole big metro area or region, a single live Overpass API query for the place polygon can be slow or get rate-limited. Instead, download an extract once and load it locally:
+For a whole big metro area or region, a single live Overpass API query for the place polygon can be slow or get rate-limited. `build_graph` already retries a short list of independent public Overpass mirrors (`script.py`'s `OVERPASS_MIRRORS`) if the primary one fails for any reason, but if all of them are unreachable from wherever this is running, download an extract once and load it locally instead:
 
 ```
 python script.py --osm-file path/to/extract.osm --weight_name length --algorithm cpp
@@ -78,3 +78,4 @@ A couple of things specific to this app's deploy config:
 - **Single worker, multiple threads.** [app.py](app.py) keeps each solve's live-progress state in an in-memory dict (`jobs`), shared by the background thread doing the solve and the polling requests checking on it. That only works if every request hits the *same* process — so the [Procfile](Procfile)/[render.yaml](render.yaml) run gunicorn with `--workers 1 --threads 4`, not multiple worker processes. Don't bump `--workers` above 1 without also moving `jobs` to something shared across processes (e.g. Redis).
 - **Free tier sleeps, not expires.** Render's free plan spins the service down after 15 minutes with no traffic, and spins it back up on the next request (~30-50s cold start). It doesn't get deleted or stop working after some fixed period — but the first request after a quiet stretch will feel slow (cold start + the solve itself).
 - `runtime.txt` pins the Python version for the build; `FLASK_DEBUG=0` (set in `render.yaml`) keeps the Werkzeug debugger off in production — `app.py` only enables it when `FLASK_DEBUG` is unset or `"1"`, which is the default for local `python app.py` runs.
+- **Cloud-host connectivity to Overpass.** The public Overpass API's main instance (`overpass-api.de`) has been observed refusing/failing connections from Render's network specifically (works fine from a residential IP), likely deliberate blocking of common cloud-hosting ranges to deter scraping. `script.py`'s `OVERPASS_MIRRORS` list retries a couple of independent public mirrors before giving up — see **Large areas** below. If solves on the deployed instance fail immediately with a download error, check Render's **Logs** tab for the actual exception (`app.py` logs it server-side even though the user-facing message stays generic) before assuming it's a code bug.
