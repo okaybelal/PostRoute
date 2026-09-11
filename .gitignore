@@ -4,3 +4,4 @@ route_map.html
 .venv/
 venv/
 cache/
+.DS_Store

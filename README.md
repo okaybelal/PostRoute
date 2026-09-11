@@ -6,6 +6,8 @@ It's a hands-on implementation of the **Chinese Postman Problem** (also called t
 
 **Try it live:** [postroute-21bz.onrender.com](https://postroute-21bz.onrender.com) *(free-tier hosting — sleeps after 15 minutes idle, first request after that takes ~30-50s to wake back up)*
 
+![PostRoute solving Piedmont, CA — 495 streets, 685-stop route, 73.77 km](docs/piedmont-example.png)
+
 ## How it works
 
 A city's streets form a graph — intersections are nodes, streets are weighted edges. To drive down every edge and get back to the start in one continuous loop, every intersection needs an *even* number of streets meeting at it (you always arrive down one and leave down another). Real cities are full of intersections that break this rule — dead ends, three-way junctions — so the graph first has to be made "Eulerian" by duplicating some streets, effectively driving down them twice.
