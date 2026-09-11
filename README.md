@@ -1,81 +1,49 @@
 # PostRoute
 
-Find the cost-effective route for a postal carrier to cover every street in a city at least once, using real street-network data.
+Every street in a city, covered in one loop, at the shortest total distance possible. That's the problem PostRoute solves — given a real city's street map, it works out the cheapest route a postal carrier could drive to pass down every single street at least once and end up back where they started.
 
-This is the **Chinese Postman Problem** (Route Inspection Problem): given a city's road graph, find the minimum-cost closed walk that traverses every edge (street) at least once. It's the same underlying problem that governs snow plowing, street sweeping, garbage collection, and mail delivery — here applied to postal routing.
+It's a hands-on implementation of the **Chinese Postman Problem** (also called the Route Inspection Problem), a classic piece of graph theory that shows up anywhere someone has to *cover* a network rather than just get from A to B — snow plows, street sweepers, garbage trucks, meter readers, mail carriers. PostRoute applies it to the last one, on real OpenStreetMap street data, with a live web UI to watch it solve.
 
-Built with `osmnx`, `networkx`, `pandas`, `numpy`, and `plotly`.
+**Try it live:** [postroute-21bz.onrender.com](https://postroute-21bz.onrender.com) *(free-tier hosting — sleeps after 15 minutes idle, first request after that takes ~30-50s to wake back up)*
 
-**Live:** [postroute-21bz.onrender.com](https://postroute-21bz.onrender.com) (free tier — sleeps after 15 min idle, first request after that takes ~30-50s to wake up)
+## How it works
 
-Solved live on the deployed instance, Manhattan with `cpp`: 8,215 streets, 4,634 intersections, a 9,585-stop route covering 1,123.7 km.
+A city's streets form a graph — intersections are nodes, streets are weighted edges. To drive down every edge and get back to the start in one continuous loop, every intersection needs an *even* number of streets meeting at it (you always arrive down one and leave down another). Real cities are full of intersections that break this rule — dead ends, three-way junctions — so the graph first has to be made "Eulerian" by duplicating some streets, effectively driving down them twice.
+
+The trick is picking *which* streets to duplicate as cheaply as possible. PostRoute pairs up every odd intersection with another one via a minimum-weight matching, then finds the shortest path between each pair and duplicates the streets along it. Get that pairing right and you've found the shortest possible route that covers everything.
+
+Four ways to solve it, picked from the algorithm dropdown:
+
+- **`cpp`** — the real thing: exact minimum-weight matching between odd intersections for small-to-mid-size areas, falling back to matching each one against only its 10 nearest odd neighbors once there are too many to pair exhaustively (matching cost grows roughly cubically with the number of odd intersections, so an exact search that's instant for a small town becomes genuinely intractable for a large metro).
+- **`fleury`** — the textbook algorithm for walking an Eulerian graph without accidentally stranding yourself on the wrong side of a bridge. Same cost as `cpp`, different walk.
+- **`dfs` / `bfs`** — no matching at all, just a greedy walk that backtracks via the nearest unfinished street when it runs out of road. Non-optimal, but stays fast no matter how big the city gets.
+
+Solving happens on a background thread while the page polls for progress, so the UI shows a real 0-100% progress bar and a live log of what's happening stage by stage — not a spinner with no idea whether it's working or stuck.
 
 ## Setup
 
 ```
 pip install -r requirements.txt
-```
-
-## Usage
-
-### Web app
-
-```
 python app.py
 ```
 
-Open `http://localhost:5050`, type a city and country, pick a weight metric and algorithm, and hit **Solve route**. The solve runs live (real OSMnx download), so larger cities can take a while — instead of a blind spinner, a progress bar tracks real overall completion (0-100%, weighted across download → matching → circuit-building, not per-stage guesswork) alongside a live log of what the solver is actually doing stage by stage. Stats and the interactive map render once it's done.
+Open `http://localhost:5050`, type a city, pick an algorithm, hit **Solve route**.
 
-Under the hood: submitting the form starts the solve on a background thread and the page polls for status every ~700ms, so the browser tab stays responsive throughout rather than blocking on one long request.
-
-### CLI
+Prefer a terminal? The same solver runs as a CLI:
 
 ```
-python script.py --city <city> --country <country> --weight_name length --algorithm cpp
+python script.py --city "Le Plateau-Mont-Royal" --country Canada --algorithm cpp
 ```
 
-- `--weight_name`: `length` (distance) or `travel_time`
-- `--algorithm`: `cpp` (optimal, min-weight-matching Eulerian augmentation), `fleury` (Fleury's algorithm — same cost as `cpp`), `dfs`/`bfs` (cheap non-optimal heuristics — no matching step at all, so they stay fast even on huge graphs)
-- `--osm-file`: load a local `.osm` XML extract instead of downloading via the live Overpass API (see **Large areas** below); when given, `--city`/`--country` become optional (just used as a label)
+`--weight_name` switches between optimizing `length` (distance, default) or `travel_time`. `--osm-file` loads a local `.osm` extract instead of downloading live — useful for a whole metro area where a single Overpass query would be slow (get one from [bbbike.org](https://extract.bbbike.org/), or a Geofabrik `.osm.pbf` converted with `osmium cat -f osm in.pbf -o out.osm`).
 
-Example:
+## Deploying
 
-```
-python script.py --city "Le Plateau-Mont-Royal" --country Canada --weight_name length --algorithm cpp
-```
+Set up for [Render](https://render.com): connect the repo, **New > Blueprint**, it reads [render.yaml](render.yaml) and configures itself. A couple of things worth knowing if you're poking at the deploy config:
 
-For a smaller/faster test area, try a borough or a small town rather than a whole metro area — OSMnx downloads the full street graph for the given place.
+- It runs one gunicorn worker process with multiple threads (`Procfile`/`render.yaml`), not several processes — the live-progress state lives in an in-memory dict shared across requests within one process, so more workers would break status polling without also adding something like Redis behind it.
+- The public Overpass API's main server has been observed blocking connections from some cloud-hosting networks (Render included) to deter scraping. `script.py` retries a couple of independent mirrors before giving up — see `OVERPASS_MIRRORS`.
 
-Running it prints network/route stats and opens an interactive map (`route_map.html`) tracing the carrier's route.
+## License
 
-## Performance notes
-
-`cpp`/`fleury` need to pair up every odd-degree intersection (a graph can only be traversed in one loop if every intersection has an even number of streets meeting there) via a minimum-weight matching. That matching is computed exactly for up to 300 odd-degree intersections — true optimal, and fine for anything from a small town up to a mid-size city. Above that (a big metro area), each odd intersection is matched against only its 10 nearest odd neighbors instead of all of them, trading a small amount of optimality for tractability — without this, the matching cost grows quadratically with the number of odd intersections and becomes intractable at metro scale.
-
-If you just need *a* route fast and don't need the shortest one, `dfs`/`bfs` skip the matching step entirely and stay fast regardless of city size.
-
-### Large areas
-
-For a whole big metro area or region, a single live Overpass API query for the place polygon can be slow or get rate-limited. `build_graph` already retries a short list of independent public Overpass mirrors (`script.py`'s `OVERPASS_MIRRORS`) if the primary one fails for any reason, but if all of them are unreachable from wherever this is running, download an extract once and load it locally instead:
-
-```
-python script.py --osm-file path/to/extract.osm --weight_name length --algorithm cpp
-```
-
-Get an `.osm` XML extract from [bbbike.org's extract service](https://extract.bbbike.org/) (draw the area you want), or convert a Geofabrik `.osm.pbf` regional extract with `osmium cat -f osm in.pbf -o out.osm` (requires the `osmium` command-line tool). This isn't wired into the web app yet — CLI only.
-
-## Deploying the web app
-
-The repo is set up to deploy to [Render](https://render.com) as-is:
-
-1. Push to GitHub (already done for this repo).
-2. On Render: **New > Blueprint**, point it at this repo. It reads [render.yaml](render.yaml) and configures everything automatically (build command, start command, free plan).
-   - Alternatively, **New > Web Service** manually: build command `pip install -r requirements.txt`, start command from [Procfile](Procfile).
-3. Deploy. Render gives you a public `https://<name>.onrender.com` URL.
-
-A couple of things specific to this app's deploy config:
-
-- **Single worker, multiple threads.** [app.py](app.py) keeps each solve's live-progress state in an in-memory dict (`jobs`), shared by the background thread doing the solve and the polling requests checking on it. That only works if every request hits the *same* process — so the [Procfile](Procfile)/[render.yaml](render.yaml) run gunicorn with `--workers 1 --threads 4`, not multiple worker processes. Don't bump `--workers` above 1 without also moving `jobs` to something shared across processes (e.g. Redis).
-- **Free tier sleeps, not expires.** Render's free plan spins the service down after 15 minutes with no traffic, and spins it back up on the next request (~30-50s cold start). It doesn't get deleted or stop working after some fixed period — but the first request after a quiet stretch will feel slow (cold start + the solve itself).
-- `runtime.txt` pins the Python version for the build; `FLASK_DEBUG=0` (set in `render.yaml`) keeps the Werkzeug debugger off in production — `app.py` only enables it when `FLASK_DEBUG` is unset or `"1"`, which is the default for local `python app.py` runs.
-- **Cloud-host connectivity to Overpass.** The public Overpass API's main instance (`overpass-api.de`) has been observed refusing/failing connections from Render's network specifically (works fine from a residential IP), likely deliberate blocking of common cloud-hosting ranges to deter scraping. `script.py`'s `OVERPASS_MIRRORS` list retries a couple of independent public mirrors before giving up — see **Large areas** below. If solves on the deployed instance fail immediately with a download error, check Render's **Logs** tab for the actual exception (`app.py` logs it server-side even though the user-facing message stays generic) before assuming it's a code bug.
+MIT — see [LICENSE](LICENSE).
