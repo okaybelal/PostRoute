@@ -1,6 +1,15 @@
 """PostRoute web app: pick a city, algorithm, and weight metric in the
 browser and get back the solved delivery route on an interactive map,
 with live progress while it solves.
+
+Architecture: POST /api/solve starts the actual solve (build_graph +
+the chosen algorithm from algorithms.ALGORITHMS) on a background thread
+and returns a job_id immediately; GET /api/solve/status/<job_id> is
+polled by the frontend every ~700ms for live progress messages and the
+final result. Job state lives in the in-memory `jobs` dict below, which
+is why this must run as a single worker process (see Procfile/render.yaml)
+- multiple processes would each have their own copy of `jobs`, so a
+status poll could land on a worker that never saw the job that started it.
 """
 
 import json
