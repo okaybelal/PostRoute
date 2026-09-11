@@ -18,7 +18,7 @@ Four ways to solve it, picked from the algorithm dropdown:
 
 - **`cpp`** is the real thing: exact minimum-weight matching between odd intersections for small-to-mid-size areas, falling back to matching each one against only its 10 nearest odd neighbors once there are too many to pair exhaustively (matching cost grows roughly cubically with the number of odd intersections, so an exact search that's instant for a small town becomes genuinely intractable for a large metro).
 - **`fleury`** is the textbook algorithm for walking an Eulerian graph without accidentally stranding yourself on the wrong side of a bridge. Same cost as `cpp`, different walk.
-- **`dfs` / `bfs`** do no matching at all, just a greedy walk that backtracks via the nearest unfinished street when it runs out of road. Non-optimal, but stays fast no matter how big the city gets.
+- **`dfs` / `bfs`** do no matching at all. They just walk to any neighboring street that's still uncovered (`dfs` always takes the first option, `bfs` picks randomly among them, despite the name it isn't a literal breadth-first search), and when every street from the current spot is already covered, jump via the shortest path to the nearest intersection that still has one left. No lookahead, so it can rack up unnecessary backtracking, and it never loops back to the start the way `cpp`/`fleury` do. But it stays fast no matter how big the city gets, since there's no matching step to blow up.
 
 Solving happens on a background thread while the page polls for progress, so the UI shows a real 0-100% progress bar and a live log of what's happening stage by stage, not a spinner with no idea whether it's working or stuck.
 
