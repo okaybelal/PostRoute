@@ -45,7 +45,7 @@ def _as_simple_weighted(G):
     return H
 
 
-def _eulerize(H, exact_threshold=300, k_nearest=10, progress=None, frac_range=(0.0, 1.0)):
+def _eulerize(H, exact_threshold=100, k_nearest=10, progress=None, frac_range=(0.0, 1.0)):
     """Turn H into an Eulerian multigraph by duplicating the minimum-weight
     set of edges needed to fix every odd-degree vertex.
 
@@ -62,7 +62,11 @@ def _eulerize(H, exact_threshold=300, k_nearest=10, progress=None, frac_range=(0
     the exact case). Above it, each odd vertex is only matched against its
     `k_nearest` closest odd neighbors, bounding the cost to ~O(k *
     k_nearest) at the expense of a possibly slightly longer (non-optimal)
-    route.
+    route. `nx.max_weight_matching` itself is roughly O(k^3), so even the
+    "exact" case needs a conservative cutoff — a real small city (Piedmont,
+    CA: 290 odd vertices) measured at ~8s locally just for the matching
+    call, which is far worse on constrained/shared CPU (e.g. free-tier
+    cloud hosting).
 
     `progress` calls report a fraction linearly rescaled into `frac_range`,
     so the caller controls what share of the overall pipeline this step
