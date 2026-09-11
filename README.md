@@ -2,7 +2,7 @@
 
 Every street in a city, covered in one loop, at the shortest total distance possible. That's the problem PostRoute solves: given a real city's street map, it works out the cheapest route a postal carrier could drive to pass down every single street at least once and end up back where they started.
 
-It's a hands-on implementation of the **Chinese Postman Problem** (also called the Route Inspection Problem), a classic piece of graph theory that shows up anywhere someone has to *cover* a network rather than just get from A to B: snow plows, street sweepers, garbage trucks, meter readers, mail carriers. PostRoute applies it to the last one, on real OpenStreetMap street data, with a live web UI to watch it solve.
+It's a hands-on implementation of the **[Chinese Postman Problem](https://www.geeksforgeeks.org/dsa/chinese-postman-route-inspection-set-1-introduction/)** (also called the Route Inspection Problem), a classic piece of graph theory that shows up anywhere someone has to *cover* a network rather than just get from A to B: snow plows, street sweepers, garbage trucks, meter readers, mail carriers. PostRoute applies it to the last one, on real OpenStreetMap street data, with a live web UI to watch it solve.
 
 **Try it live:** [postroute-21bz.onrender.com](https://postroute-21bz.onrender.com) *(free-tier hosting, sleeps after 15 minutes idle; first request after that takes ~30-50s to wake back up)*
 
