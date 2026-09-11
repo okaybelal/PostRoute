@@ -39,13 +39,6 @@ python script.py --city "Le Plateau-Mont-Royal" --country Canada --algorithm cpp
 
 `--weight_name` switches between optimizing `length` (distance, default) or `travel_time`. `--osm-file` loads a local `.osm` extract instead of downloading live — useful for a whole metro area where a single Overpass query would be slow (get one from [bbbike.org](https://extract.bbbike.org/), or a Geofabrik `.osm.pbf` converted with `osmium cat -f osm in.pbf -o out.osm`).
 
-## Deploying
-
-Set up for [Render](https://render.com): connect the repo, **New > Blueprint**, it reads [render.yaml](render.yaml) and configures itself. A couple of things worth knowing if you're poking at the deploy config:
-
-- It runs one gunicorn worker process with multiple threads (`Procfile`/`render.yaml`), not several processes — the live-progress state lives in an in-memory dict shared across requests within one process, so more workers would break status polling without also adding something like Redis behind it.
-- The public Overpass API's main server has been observed blocking connections from some cloud-hosting networks (Render included) to deter scraping. `script.py` retries a couple of independent mirrors before giving up — see `OVERPASS_MIRRORS`.
-
 ## License
 
 MIT — see [LICENSE](LICENSE).
